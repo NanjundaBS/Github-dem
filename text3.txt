@@ -1,0 +1,160 @@
+'''yml
+ 
+requestHeader:
+ 
+  Custom-Header-AppD: "IHGAppDSynthetic/1.0"
+ 
+'''
+ 
+# 20221129 Tom Valdes: Initial script
+ 
+# 20221130 Tom Valdes: replaced the actual URL and PASSWORD with <URL> and <PASSWORD> since this is an example script
+ 
+# 20240307 Daniel Browne: Fixed up script and fixed wiki formatting.
+ 
+# Modified by UVGN12 - Vignesh Ganesan
+ 
+# Modifed on June 2024
+ 
+# Application - Inventory Configuration Tool (ICT)
+ 
+import logging
+import re
+import sys
+import time
+import unittest
+from datetime import datetime, timedelta
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.wait import WebDriverWait
+ 
+class ConcertoICTJob(unittest.TestCase):
+ 
+   def test_concerto_ict_job(self):
+# Test script starts here:
+        driver = self.driver
+        self.wait = WebDriverWait(self.driver, 200)
+        self.verificationErrors = []
+        self.driver.maximize_window
+# Load <URL>
+        logging.info('Step 1 : Loading of <https://concerto.ihg.com/rpcp/#/inventory-configuration-tool>')
+        self._get_url('Home Page SSO redirect','https://concerto.ihg.com/rpcp/#/inventory-configuration-tool/sleeping-room')
+        logging.info('Step 2 : Sign In')
+        self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '#username')))
+# Username
+        self._send_keys('typing username', By.CSS_SELECTOR,'#username','sa_activewatch')
+        self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#password')))
+        time.sleep(1)
+# Password
+        self._send_keys('typing password', By.CSS_SELECTOR,'#password','gG5FkU{BNS8B<2N3v@w0$>=wLv8w7fxSv%yO+Fds')
+ 
+# Click "Login"
+        self.wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Login']")))
+        self._click('Click Login button', By.CSS_SELECTOR,'#input-group-1 > a')
+        # self.wait.until(EC.invisibility_of_element_located((By.XPATH, "//div[@class='uic-spinner' and not(@hidden)]//img  | //spinner-directive[not(contains(@style,'none'))]//ahp-img")))
+        self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h1[text()='Inventory Configuration']")))
+        self.wait.until(EC.visibility_of_element_located((By.XPATH, "//span[@class='user-name']")))
+# Validate page load
+        logging.info('Step 3 : Validate home page load')
+        self._verify_element_in_page(By.XPATH, "//h1[text()='Inventory Configuration']")
+        self._verify_element_in_page(By.XPATH, "//span[contains(text(),'SR Attribute Assignment')]")
+        # self.wait.until(EC.invisibility_of_element_located((By.XPATH, "//div[@class='uic-spinner' and not(@hidden)]//img  | //spinner-directive[not(contains(@style,'none'))]//ahp-img")))
+# Log out
+        logging.info('Step 4 : Logout')
+# Click "Logout"
+        self._click('Click "LogoutName"', By.XPATH,"//span[@class='user-name']")
+        time.sleep(2)
+        # self.wait.until(EC.staleness_of((By.XPATH, "//span[text()='Sign Out']")))
+        self.wait.until(EC.presence_of_element_located((By.XPATH, "//span[text()='Sign Out']")))
+        self._click('Click "Logout"', By.XPATH,"//span[text()='Sign Out']")
+# Validate logout
+        logging.info('Step 5 : Validate logout')
+ 
+   def setUp(self):
+# Driver defined here is unused by AppDynamics synthetics, for local testing only.
+       self.driver = webdriver.Chrome()
+# Wait time for ensuring an element DOES exist.
+# Will wait at most this time, if not found by then, then job fails.
+       self.positive_wait_time = 200
+# Wait time for ensuring an element DOES NOT exist.
+# Will ALWAYS wait this long before continuing when checking for non-existence of an element.
+       self.negative_wait_time = 5
+       self.positive_wait = WebDriverWait(self.driver, self.positive_wait_time)
+       self.negative_wait = WebDriverWait(self.driver, self.negative_wait_time)
+ 
+   def tearDown(self):
+       self.driver.quit()
+##### Helper Functions - Actions #####
+   def _get_url(self, description: str, url: str):
+        logging.info(description)
+        self.driver.get(url)
+ 
+   def _click(self, description: str, selector_type: By, selector_string: str):
+        logging.info(description)
+        self.positive_wait.until(EC.element_to_be_clickable((selector_type, selector_string)))
+        self.positive_wait.until(EC.visibility_of_element_located((selector_type, selector_string)))
+        element = self.driver.find_element(selector_type, selector_string)
+        self.driver.execute_script("arguments[0].scrollIntoView();", element)
+        self.driver.execute_script("arguments[0].click();", element)
+        return element
+ 
+   def _send_keys(self, description: str, selector_type: By, selector_string: str, keys: str):
+        element = self._click(description, selector_type, selector_string)
+        self.driver.execute_script("arguments[0].innerHTML = \"\";", element)
+        element.send_keys(keys)
+ 
+   def _select_option(self, description: str, selector_type: By, selector_string: str, index: int):
+        element = self._click(description, selector_type, selector_string)
+        Select(element).select_by_index(index)
+##### Helper Functions - Validators #####
+ 
+   def _is_string_in_element(self, needle: str, selector_type: By, selector_string: str, positive_check=True):
+       if positive_check:
+            wait = self.positive_wait
+            wait_time = self.positive_wait_time
+       else :
+            wait = self.negative_wait
+            wait_time = self.negative_wait_time
+            wait.until(EC.visibility_of_element_located((selector_type, selector_string)))
+            start_time = datetime.now()
+            max_timeout_reached = False
+            found_needle = False
+ 
+       while not max_timeout_reached and not found_needle:
+            text = self.driver.find_element_by_tag_name(selector_string).text.lower()
+            found_needle = re.search(needle.lower(), text) is not None
+            elapsed = datetime.now() - start_time
+ 
+            if elapsed > timedelta(seconds=wait_time):
+                max_timeout_reached = True
+            else:
+                time.sleep(1)
+ 
+       return found_needle
+ 
+   def _verify_string_in_page(self, needle: str):
+        logging.info(f'Verifying {needle.lower()} is contained in the page.')
+        self.assertTrue(self._is_string_in_element(needle, By.TAG_NAME,"body"))
+ 
+   def _verify_string_not_in_page(self, needle: str):
+        logging.info(f'Verifying {needle.lower()} is not contained in the page.')
+        self.assertFalse(self._is_string_in_element(needle, By.TAG_NAME,"body", positive_check=False))
+ 
+   def _verify_element_in_page(self, selector_type: By, selector_string: str):
+        logging.info(f'Verifying "{selector_string}" exists.')
+        self.positive_wait.until(EC.visibility_of_element_located((selector_type, selector_string)))
+        element = self.driver.find_element(selector_type, selector_string)
+        self.assertIsNotNone(element)
+ 
+   def _verify_element_not_in_page(self, selector_type: By, selector_string: str):
+        logging.info(f'Verifying "{selector_string}" does not exist.')
+        with self.assertRaises(TimeoutException):
+           self.negative_wait.until(EC.visibility_of_element_located((selector_type, selector_string)))
+ 
+ 
+if __name__ =="__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    unittest.main()
